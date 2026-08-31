@@ -106,3 +106,25 @@ For a list of supported devices see the [OpenWrt Hardware Database](https://open
 ## License
 
 OpenWrt is licensed under GPL-2.0
+
+---
+
+## XR1710G 定制分支说明
+
+本分支在 OpenWrt master (6.18) 基础上为 **Gemtek XR1710G**（Airoha AN7581/EN7581）提供完整支持，并集成以下功能：
+
+### 已集成功能
+- **Airoha NPU/PPE/SOE 硬件卸载**：Wi-Fi 报文、flowtable、IPSec 全链路硬件加速
+- **Wi-Fi 7**：MT7996 三频 + MLO + EHT320
+- **LuCI 套件**：airoha-npu、MLO、fancontrol、netspeedtest、flowsense、Glass 主题（默认简体中文）
+- **新增**：`luci-app-openclash`（内置，内核在插件内在线下载）、`easytier` + `luci-app-easytier`（P2P 组网）、`ddns-scripts` + `luci-app-ddns`（动态 DNS）
+
+### 软件源
+固件内已预置 Airoha AN7581/EN7581（aarch64_cortex-a53）软件源：
+- APK: `/etc/apk/repositories.d/customfeeds.list`（官方 SNAPSHOT 各 feed，`.adb` 索引）
+- opkg: `/etc/opkg/customfeeds.conf`（兼容模式）
+
+> 注意：OpenWrt 正式版（24.10 / 25.12）尚不含 airoha target，本固件只能匹配 **SNAPSHOT** 同基线源。
+
+### 云端构建（GitHub Actions）
+推送 `main` 或手动触发 `workflow_dispatch` 即可在云端编译，产物见 Actions 的 `xr1710g-firmware` artifact；打 tag 会自动发布 GitHub Release。

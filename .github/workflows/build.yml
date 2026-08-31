@@ -1,0 +1,174 @@
+name: Build XR1710G OpenWrt
+
+# (signed) force workflow registration refresh
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: [ '**.md' ]
+  workflow_dispatch:
+  release:
+    types: [ published ]
+
+concurrency:
+  group: openwrt-build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TARGET_BOARD: airoha
+  TARGET_SUBTARGET: an7581
+  TARGET_PROFILE: gemtek_xr1710g-ubi
+
+jobs:
+  toolchain:
+    name: Build cross toolchain + cache
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            build-essential clang flex bison g++ gettext texinfo ncurses-dev \
+            zlib1g-dev libssl-dev python3 python3-pip python3-setuptools \
+            unzip wget gawk gcc-multilib gnutls-bin jq time rsync
+
+      - name: Update & install feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure target (Airoha AN7581 / XR1710G)
+        run: |
+          cat > .config <<'EOF'
+          CONFIG_TARGET_airoha=y
+          CONFIG_TARGET_airoha_an7581=y
+          CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi=y
+          EOF
+          make defconfig
+
+      - name: Build cross toolchain
+        run: |
+          make -j"$(($(nproc) - 1))" toolchain/install V=s
+
+      - name: Restore dl/ package download cache
+        uses: actions/cache/restore@v4
+        with:
+          path: dl
+          key: dl-${{ runner.arch }}-${{ hashFiles('feeds.conf.default', 'package/**/Makefile') }}
+          restore-keys: |
+            dl-${{ runner.arch }}-
+
+      - name: Save dl/ download cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v4
+        with:
+          path: dl
+          key: dl-${{ runner.arch }}-${{ hashFiles('feeds.conf.default', 'package/**/Makefile') }}
+
+      - name: Save toolchain cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v4
+        with:
+          path: staging_dir
+          key: ${{ env.TARGET_BOARD }}-toolchain-${{ runner.arch }}-${{ github.sha }}
+          enableCrossOsArchive: true
+
+  image:
+    name: Build XR1710G firmware image
+    needs: toolchain
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            build-essential clang flex bison g++ gettext texinfo ncurses-dev \
+            zlib1g-dev libssl-dev python3 python3-pip python3-setuptools \
+            unzip wget gawk gcc-multilib gnutls-bin jq time rsync
+
+      - name: Update & install feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Restore dl/ download cache
+        uses: actions/cache/restore@v4
+        with:
+          path: dl
+          key: dl-${{ runner.arch }}-${{ hashFiles('feeds.conf.default', 'package/**/Makefile') }}
+          restore-keys: |
+            dl-${{ runner.arch }}-
+
+      - name: Restore toolchain cache
+        uses: actions/cache/restore@v4
+        with:
+          path: staging_dir
+          key: ${{ env.TARGET_BOARD }}-toolchain-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: |
+            ${{ env.TARGET_BOARD }}-toolchain-${{ runner.arch }}-
+
+      - name: Configure target (Airoha AN7581 / XR1710G)
+        run: |
+          cat > .config <<'EOF'
+          CONFIG_TARGET_airoha=y
+          CONFIG_TARGET_airoha_an7581=y
+          CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi=y
+          EOF
+          make defconfig
+
+      - name: Build firmware image
+        run: |
+          make -j"$(($(nproc) - 1))" image PROFILE=${{ env.TARGET_PROFILE }} V=s \
+            2>&1 | tee build.log
+        env:
+          FORCE_UNSAFE_CONFIGURE: 1
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/ipk
+          cp -a bin/targets/airoha/an7581/. artifacts/ 2>/dev/null || true
+          cp -a bin/packages/aarch64_cortex-a53/ipk/. artifacts/ipk/ 2>/dev/null || true
+          echo "=== artifacts ==="
+          find artifacts -maxdepth 2 -type f | head -40
+          # Upload whole image dir including profile.json / sha256sums
+          gzip -kf build.log || true
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr1710g-firmware
+          path: artifacts/
+          retention-days: 14
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log*
+          retention-days: 7
+
+      - name: Create GitHub Release (tagged builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.itb
+            artifacts/*.bin
+            artifacts/*.tar
+            artifacts/sha256sums
+          fail_on_unmatched_files: false

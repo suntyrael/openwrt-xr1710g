@@ -1,0 +1,27 @@
+# Airoha AN7581/EN7581 (XR1710G) - OpenWrt SNAPSHOT software repositories
+#
+# Architecture: aarch64_cortex-a53 (APK index format: packages.adb)
+#
+# The official SNAPSHOT feeds below match the kernel baseline (6.18 / master)
+# of this firmware image. The same feeds are also generated automatically into
+# /etc/apk/repositories.d/distfeeds.list at build time - entries listed here
+# are kept so the repositories stay available even if distfeeds.list is reset.
+#
+# NOTE: kernel module (kmods) packages are version locked and are served from
+# the distfeeds.list entry only - do not manually pin kmods URLs here.
+
+# Official OpenWrt SNAPSHOT feeds
+https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/base/packages.adb
+https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/luci/packages.adb
+https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/packages/packages.adb
+https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/routing/packages.adb
+https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/telephony/packages.adb
+https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/video/packages.adb
+
+# Third-party repositories (optional, uncomment to enable).
+# Only use repositories built against the same SNAPSHOT baseline to avoid
+# libc / library version mismatches with this image.
+#
+# https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/base/packages.adb
+# https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/luci/packages.adb
+# https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/packages/packages.adb
