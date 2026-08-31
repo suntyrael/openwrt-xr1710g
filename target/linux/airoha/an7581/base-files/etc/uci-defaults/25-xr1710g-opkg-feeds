@@ -1,12 +1,17 @@
-# Airoha AN7581/EN7581 (XR1710G) - opkg compatibility repository config
-#
+#!/bin/sh
+
+# Generate the opkg compatibility source list for Airoha AN7581/EN7581
+# (aarch64_cortex-a53). This firmware is built with APK as the primary
+# package manager; /etc/opkg/customfeeds.conf is only used when opkg is
+# in play, so it is generated at first boot instead of shipped as a file
+# (the static customfeeds.conf belongs to the opkg package itself).
+
+mkdir -p /etc/opkg
+
+cat > /etc/opkg/customfeeds.conf <<'EOF'
+# Airoha AN7581/EN7581 (XR1710G) - opkg compatibility source config
 # Architecture: aarch64_cortex-a53
-# This firmware is built with APK as the primary package manager, but opkg
-# support is kept for tooling compatibility. The official SNAPSHOT feeds below
-# match the 6.18 / master kernel baseline of this image.
-#
-# Kernel module (kmods) packages are version locked - use the distfeeds.conf
-# generated at build time for kmods, do not pin kmods URLs here.
+# Official OpenWrt SNAPSHOT feeds matching the 6.18 master baseline.
 
 src/gz base https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/base
 src/gz luci https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/luci
@@ -20,3 +25,6 @@ src/gz video https://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53
 #
 # src/gz immortalwrt_base https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/base
 # src/gz immortalwrt_luci https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/luci
+EOF
+
+exit 0
