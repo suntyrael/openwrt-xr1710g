@@ -1,14 +1,10 @@
 name: Build XR1710G OpenWrt
 
-# (signed) force workflow registration refresh
-
 on:
   push:
     branches: [ main ]
     paths-ignore: [ '**.md' ]
   workflow_dispatch:
-  release:
-    types: [ published ]
 
 concurrency:
   group: openwrt-build-${{ github.ref }}
@@ -16,8 +12,6 @@ concurrency:
 
 env:
   TARGET_BOARD: airoha
-  TARGET_SUBTARGET: an7581
-  TARGET_PROFILE: gemtek_xr1710g-ubi
 
 jobs:
   toolchain:
@@ -52,33 +46,49 @@ jobs:
           CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi=y
           EOF
           make defconfig
+          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="aarch64_cortex-a53"' .config || { echo "::error::target config failed"; exit 1; }
 
-      - name: Build cross toolchain
-        run: |
-          make -j"$(($(nproc) - 1))" toolchain/install V=s
-
-      - name: Restore dl/ package download cache
+      - name: Restore dl/ download cache
         uses: actions/cache/restore@v4
         with:
           path: dl
-          key: dl-${{ runner.arch }}-${{ hashFiles('feeds.conf.default', 'package/**/Makefile') }}
-          restore-keys: |
-            dl-${{ runner.arch }}-
+          key: dl-airoha-x64-v1
+          restore-keys: dl-airoha-
+
+      - name: Restore toolchain cache
+        uses: actions/cache/restore@v4
+        with:
+          path: staging_dir/toolchain-*
+          key: tc-airoha-aarch64-${{ hashFiles('toolchain/**/Makefile', 'target/linux/airoha/Makefile') }}
+          restore-keys: tc-airoha-aarch64-
+
+      - name: Build cross toolchain
+        run: |
+          set -o pipefail
+          make -j"$(($(nproc) - 1))" toolchain/install V=s 2>&1 | tee -a build.log
+
+      - name: Save toolchain cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: staging_dir/toolchain-*
+          key: tc-airoha-aarch64-${{ hashFiles('toolchain/**/Makefile', 'target/linux/airoha/Makefile') }}
+          enableCrossOsArchive: true
 
       - name: Save dl/ download cache
-        if: ${{ !cancelled() }}
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: dl
-          key: dl-${{ runner.arch }}-${{ hashFiles('feeds.conf.default', 'package/**/Makefile') }}
+          key: dl-airoha-x64-v1
 
-      - name: Save toolchain cache
-        if: ${{ !cancelled() }}
-        uses: actions/cache/save@v4
+      - name: Upload toolchain build log
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          path: staging_dir
-          key: ${{ env.TARGET_BOARD }}-toolchain-${{ runner.arch }}-${{ github.sha }}
-          enableCrossOsArchive: true
+          name: toolchain-build-log
+          path: build.log*
+          retention-days: 7
 
   image:
     name: Build XR1710G firmware image
@@ -109,17 +119,15 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: dl
-          key: dl-${{ runner.arch }}-${{ hashFiles('feeds.conf.default', 'package/**/Makefile') }}
-          restore-keys: |
-            dl-${{ runner.arch }}-
+          key: dl-airoha-x64-v1
+          restore-keys: dl-airoha-
 
       - name: Restore toolchain cache
         uses: actions/cache/restore@v4
         with:
-          path: staging_dir
-          key: ${{ env.TARGET_BOARD }}-toolchain-${{ runner.arch }}-${{ github.sha }}
-          restore-keys: |
-            ${{ env.TARGET_BOARD }}-toolchain-${{ runner.arch }}-
+          path: staging_dir/toolchain-*
+          key: tc-airoha-aarch64-${{ hashFiles('toolchain/**/Makefile', 'target/linux/airoha/Makefile') }}
+          restore-keys: tc-airoha-aarch64-
 
       - name: Configure target (Airoha AN7581 / XR1710G)
         run: |
@@ -129,36 +137,38 @@ jobs:
           CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi=y
           EOF
           make defconfig
+          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="aarch64_cortex-a53"' .config || { echo "::error::target config failed"; exit 1; }
 
-      - name: Build firmware image
+      - name: Build firmware image (make world)
         run: |
-          make -j"$(($(nproc) - 1))" image PROFILE=${{ env.TARGET_PROFILE }} V=s \
-            2>&1 | tee build.log
-        env:
-          FORCE_UNSAFE_CONFIGURE: 1
+          set -o pipefail
+          # OpenWrt master has no 'make image' target anymore - the default
+          # 'world' goal builds everything selected in .config, and image
+          # generation happens as part of the target install step.
+          make -j"$(($(nproc) - 1))" V=s 2>&1 | tee -a build.log
 
       - name: Collect artifacts
         run: |
-          mkdir -p artifacts/ipk
+          mkdir -p artifacts/ipk artifacts/kmods
           cp -a bin/targets/airoha/an7581/. artifacts/ 2>/dev/null || true
-          cp -a bin/packages/aarch64_cortex-a53/ipk/. artifacts/ipk/ 2>/dev/null || true
-          echo "=== artifacts ==="
-          find artifacts -maxdepth 2 -type f | head -40
-          # Upload whole image dir including profile.json / sha256sums
-          gzip -kf build.log || true
+          cp -a bin/packages/aarch64_cortex-a53/. artifacts/ipk/ 2>/dev/null || true
+          mkdir -p artifacts/kmods
+          find bin -maxdepth 3 -type f | head -60
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
           name: xr1710g-firmware
-          path: artifacts/
-          retention-days: 14
+          path: |
+            bin/targets/airoha/an7581/
+            bin/packages/aarch64_cortex-a53/
+          retention-days: 30
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
+          name: image-build-log
           path: build.log*
           retention-days: 7
 
@@ -167,8 +177,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/*.itb
-            artifacts/*.bin
-            artifacts/*.tar
-            artifacts/sha256sums
+            bin/targets/airoha/an7581/*.itb
+            bin/targets/airoha/an7581/*.bin
+            bin/targets/airoha/an7581/sha256sums
           fail_on_unmatched_files: false
