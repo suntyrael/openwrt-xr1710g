@@ -158,6 +158,7 @@ define Device/gemtek_xr1710g-ubi
 		    luci-app-openclash \
 		    luci \
 		    luci-app-ddns \
+		    luci-app-ddns-go \
 		    luci-app-firewall luci-app-mlo \
 		    luci-app-package-manager \
 		    luci-i18n-airoha-npu-zh-cn \

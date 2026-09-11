@@ -117,7 +117,7 @@ OpenWrt is licensed under GPL-2.0
 - **Airoha NPU/PPE/SOE 硬件卸载**：Wi-Fi 报文、flowtable、IPSec 全链路硬件加速
 - **Wi-Fi 7**：MT7996 三频 + MLO + EHT320
 - **LuCI 套件**：airoha-npu、MLO、fancontrol、netspeedtest、flowsense、Glass 主题（默认简体中文）
-- **新增**：`luci-app-openclash`（内置，内核在插件内在线下载）、`easytier` + `luci-app-easytier`（P2P 组网）、`ddns-scripts` + `luci-app-ddns`（动态 DNS）
+- **新增**：`luci-app-openclash`（内置，内核在插件内在线下载）、`easytier` + `luci-app-easytier`（P2P 组网）、`ddns-scripts` + `luci-app-ddns`（动态 DNS）、`ddns-go` + `luci-app-ddns-go`（带 Web 界面动态域名解析）
 
 ### 软件源
 固件内已预置 Airoha AN7581/EN7581（aarch64_cortex-a53）软件源：
